@@ -69,7 +69,7 @@ async function main() {
 
     }
 
-    md.unshift(`#Totals\n\n- contributors: ${stats.contributors}\n- totals: ${stats.contributors.toFixed(2)}\n\n`);
+    md.unshift(`#Totals\n\n- contributors: ${stats.contributors}\n- totals: ${stats.total.toFixed(2)}\n\n`);
     fs.writeFileSync('./README.md', md.join('\n'));
     fs.writeFileSync('./airdrop.json', JSON.stringify(json));
 

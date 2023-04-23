@@ -1,7 +1,7 @@
 #Totals
 
 - contributors: 1173
-- totals: 1173.00
+- totals: 1158486.29
 
 
 
