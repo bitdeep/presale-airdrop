@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -15,7 +15,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
  *
  * Once user claim it's airdrop, it can't claim again.
  *
- * @author: bitdeep
  *
  */
 contract PresaleAirdrop is Ownable {
@@ -161,7 +160,7 @@ contract PresaleAirdrop is Ownable {
     /**
      * @dev use to fetch information about a claim by user address.
      */
-    function getClaimInfo(address user) public view returns(ClaimInfo){
+    function getClaimInfo(address user) public view returns(ClaimInfo memory){
         return claimData[user];
     }
 
@@ -169,7 +168,7 @@ contract PresaleAirdrop is Ownable {
      * @dev compute a token amount by user address.
      * if user already claimed return 0 otherwise return the % to ben sent.
      */
-    function getClaimAmount(address user){
+    function getClaimAmount(address user) public view returns(uint){
 
         ClaimInfo memory user = claimData[user];
 
