@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 /**
  * @title PresaleAirdrop
@@ -50,6 +50,12 @@ contract PresaleAirdrop is Ownable {
         uint claimedIn;
     }
 
+    // compact struct to load data into contract to avoid gas limit
+    struct LoadDataInfo {
+        address u;
+        uint v;
+    }
+
     /**
      * @dev a map containing claim/claimed info of all users eligible to claim.
      */
@@ -65,6 +71,11 @@ contract PresaleAirdrop is Ownable {
      */
     bool private LoadClaimInitialized;
 
+    /**
+     * @dev allow users to claim the airdrop after admin set it to true.
+     */
+    bool public usersCanClaim = false;
+
     error InitInvalidClaimValue();
     error InitInvalidTreasure();
     error LoadClaimAlreadySet();
@@ -73,6 +84,7 @@ contract PresaleAirdrop is Ownable {
     error UserNotFound();
     error ClaimInsufficientTreasureAllowance();
     error ClaimInsufficientTreasureBalance();
+    error claimNotOpenYet();
 
     /**
      * @dev Emitted when admin loads the claim data via hardhat loadClaimInfo task.
@@ -91,6 +103,11 @@ contract PresaleAirdrop is Ownable {
      * - claimedAmount: contains the amount sent to the user in paymentToken.
      */
     event Claim(address user, uint claimedIn, uint contributedAmount, uint claimedAmount);
+
+    /**
+     * @dev Emitted on any claim status change.
+     */
+    event ClaimOpenStatus(bool status);
 
     constructor(address _paymentToken, uint _claimPercentValue, address _TREASURE){
 
@@ -121,12 +138,20 @@ contract PresaleAirdrop is Ownable {
     }
 
     /**
+     * @dev Admin function that allow admin to open claim to users.
+     */
+    function setClaimOpenStatus( bool status ) external onlyOwner{
+        usersCanClaim = status;
+        emit ClaimOpenStatus(status);
+    }
+
+    /**
      * @dev contract admin can use this function to load all user claim data.
      * Once the data is loaded we prevent this function being called again.
      * During data processing we compute all allowance needed to be set in
      * the paymentToken contract at TREASURE user.
      */
-    function loadClaims(ClaimInfo[] memory _claimData) external onlyOwner{
+    function loadClaims(LoadDataInfo[] memory _claimData) external onlyOwner{
 
         /**
          * @dev make sure we call this function only once.
@@ -145,8 +170,10 @@ contract PresaleAirdrop is Ownable {
          * @dev set the claimData by user and compute the allowance needed.
          */
         for( uint i = 0 ; i < _claimData.length; ++i){
-            address user = _claimData[i].user;
-            claimData[ user ] = _claimData[i];
+            address user = _claimData[i].u;
+            uint contributedAmount = _claimData[i].v;
+            claimData[ user ].user = user;
+            claimData[ user ].contributedAmount = contributedAmount;
             allowanceNeeded += getClaimAmount(user);
         }
 
@@ -179,7 +206,7 @@ contract PresaleAirdrop is Ownable {
             return 0;
         }
 
-        //TODO: review the formula and consider decimals between tokens.
+        //the contributed and airdrop token are the same: USDC 6 decimals.
         return (user.contributedAmount * claimPercentValue ) / CLAIM_DENOMINATOR;
 
     }
@@ -194,6 +221,13 @@ contract PresaleAirdrop is Ownable {
          */
         if( LoadClaimInitialized == false ){
             revert ClaimDataNotLoaded();
+        }
+
+        /**
+         * @dev users can claim only after admin enable it.
+         */
+        if( usersCanClaim == false ){
+            revert claimNotOpenYet();
         }
 
         /**
@@ -218,8 +252,9 @@ contract PresaleAirdrop is Ownable {
         /**
          * @dev set both timestamp and amount claimed.
          */
-        user.claimedIn = block.timestamp;
         user.claimedAmount = getClaimAmount(msg.sender);
+        // set claimedIn or return value above will fail.
+        user.claimedIn = block.timestamp;
 
         /**
          * @dev revert if we don't have sufficient allowance on treasure

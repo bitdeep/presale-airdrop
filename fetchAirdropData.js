@@ -6,6 +6,14 @@ dotenv.config();
 const Web3 = require('web3');
 const web3 = new Web3(process.env.RPC);
 
+/**
+* @function onEventData
+* @description Parses event data and logs it to the console and adds it to a JSON and Markdown file.
+* @param {Array} events - Array of event objects returned from smart contract events.
+* @param {Array} json - Array to hold JSON data.
+* @param {Array} md - Array to hold Markdown data.
+* @param {Object} stats - Object to hold contributor and total information.
+*/
 async function onEventData( events, json, md, stats ){
     for (let j = 0; j < events.length; j++) {
         const e = events[j];
@@ -19,9 +27,11 @@ async function onEventData( events, json, md, stats ){
         const mdLine = `|${user}|${contributedAmountDecimal}|`;
         console.log(mdLine);
         md.push(mdLine);
+
+        // claimedAmount and claimedIn have 0 or loading into contract will fail.
         json.push({
-            user: user,
-            contributedAmount: contributedAmount
+            u: user,
+            v: contributedAmount
         });
         stats.contributors++;
         stats.total += contributedAmountDecimal;
@@ -29,6 +39,16 @@ async function onEventData( events, json, md, stats ){
     }
 }
 
+/**
+ * @function getEvents
+ * @description Gets the event data for a given range of blocks, processes it and logs it to the console and saves it to a JSON and Markdown file.
+ * @param {Object} presale - The instance of the contract.
+ * @param {Object} stats - Object to hold contributor and total information.
+ * @param {Array} json - Array to hold JSON data.
+ * @param {Array} md - Array to hold Markdown data.
+ * @param {Object} args - An object with fromBlock and toBlock properties.
+ * @returns {boolean} - Returns true if event data is successfully retrieved, otherwise false.
+ */
 async function getEvents(presale, stats, json, md, args){
     try {
         const events = await presale.getPastEvents(args);
@@ -40,7 +60,10 @@ async function getEvents(presale, stats, json, md, args){
     }
 }
 
-
+/**
+ * @function main
+ * @description Gets the event data for a range of blocks, processes it and logs it to the console and saves it to a JSON and Markdown file.
+ */
 async function main() {
 
     const abi = JSON.parse(fs.readFileSync("./presale-abi.js", "utf8"));
