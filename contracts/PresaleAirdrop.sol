@@ -50,12 +50,6 @@ contract PresaleAirdrop is Ownable {
         uint claimedIn;
     }
 
-    // compact struct to load data into contract to avoid gas limit
-    struct LoadDataInfo {
-        address u;
-        uint v;
-    }
-
     /**
      * @dev a map containing claim/claimed info of all users eligible to claim.
      */
@@ -67,32 +61,42 @@ contract PresaleAirdrop is Ownable {
     IERC20 private immutable paymentToken;
 
     /**
-     * @dev control variable to prevent loadClaims admin function being called twice.
-     */
-    bool private LoadClaimInitialized;
-
-    /**
      * @dev allow users to claim the airdrop after admin set it to true.
      */
     bool public usersCanClaim = false;
 
+    /**
+     * @dev the total of addresses loaded into contract.
+     */
+    uint public totalUsers = 0;
+
+    /**
+     * @dev the total of addresses that already claimed.
+     */
+    uint public totalClaims = 0;
+
+    /**
+     * @dev the total of USDC already claimed.
+     */
+    uint public totalClaimsAmount = 0;
+
     error InitInvalidClaimValue();
     error InitInvalidTreasure();
     error LoadClaimAlreadySet();
-    error ClaimDataNotLoaded();
     error UserAlreadyClaimed();
     error UserNotFound();
     error ClaimInsufficientTreasureAllowance();
     error ClaimInsufficientTreasureBalance();
     error claimNotOpenYet();
+    error InvalidDataToLoad(uint addresses, uint amounts);
 
     /**
      * @dev Emitted when admin loads the claim data via hardhat loadClaimInfo task.
      *
      * - claims: the total of users that can claim.
-     * - allowanceNeeded: the total allowance needed in TREASURE address in paymentToken TOKEN.
+     * - totalUsers: the total amount of addresses loaded into contract.
      */
-    event LoadClaimInfo(uint claims, uint allowanceNeeded);
+    event LoadClaimInfo(uint claims, uint totalUsers);
 
     /**
      * @dev Emitted when user successful claim.
@@ -112,7 +116,7 @@ contract PresaleAirdrop is Ownable {
     constructor(address _paymentToken, uint _claimPercentValue, address _TREASURE){
 
         /**
-         * @dev we set and test if the ERC20 token is a valid token.
+         * @dev the payment token, must be USDC or 6 decimal, to match airdrop data.
          */
         paymentToken = IERC20(_paymentToken);
         paymentToken.totalSupply();
@@ -151,36 +155,34 @@ contract PresaleAirdrop is Ownable {
      * During data processing we compute all allowance needed to be set in
      * the paymentToken contract at TREASURE user.
      */
-    function loadClaims(LoadDataInfo[] memory _claimData) external onlyOwner{
+    function loadClaims(address[] memory users, uint[] memory amounts) external onlyOwner{
 
-        /**
-         * @dev make sure we call this function only once.
-         */
-        if( LoadClaimInitialized )
-            revert LoadClaimAlreadySet();
-
-        LoadClaimInitialized = true;
-
-        /**
-         * @dev used to store the amount of tokens needed for allowance.
-         */
-        uint allowanceNeeded = 0;
+        if( users.length != amounts.length ){
+            revert InvalidDataToLoad(users.length, amounts.length);
+        }
 
         /**
          * @dev set the claimData by user and compute the allowance needed.
          */
-        for( uint i = 0 ; i < _claimData.length; ++i){
-            address user = _claimData[i].u;
-            uint contributedAmount = _claimData[i].v;
+        for( uint i = 0 ; i < users.length; ++i){
+            address user = users[i];
+            uint contributedAmount = amounts[i];
+            // allow admin to retry the upload if tx fail
+            if( claimData[ user ].contributedAmount > 0 )
+                continue;
             claimData[ user ].user = user;
             claimData[ user ].contributedAmount = contributedAmount;
-            allowanceNeeded += getClaimAmount(user);
         }
 
         /**
-         * @dev admin can check for the event LoadClaimInfo to know the allowance needed.
+         * @dev Update the global number of address for stats.
          */
-        emit LoadClaimInfo(_claimData.length, allowanceNeeded);
+        totalUsers += users.length;
+
+        /**
+         * @dev admin can check for the event LoadClaimInfo to see how much users loaded.
+         */
+        emit LoadClaimInfo(users.length, totalUsers);
 
     }
 
@@ -217,13 +219,6 @@ contract PresaleAirdrop is Ownable {
     function claim() external {
 
         /**
-         * @dev prevent a call of this function before admin set the data.
-         */
-        if( LoadClaimInitialized == false ){
-            revert ClaimDataNotLoaded();
-        }
-
-        /**
          * @dev users can claim only after admin enable it.
          */
         if( usersCanClaim == false ){
@@ -255,6 +250,12 @@ contract PresaleAirdrop is Ownable {
         user.claimedAmount = getClaimAmount(msg.sender);
         // set claimedIn or return value above will fail.
         user.claimedIn = block.timestamp;
+
+        // set the number of address that already claimed.
+        ++totalClaims;
+
+        // set the amount of USDC already claimed.
+        totalClaimsAmount += user.claimedAmount;
 
         /**
          * @dev revert if we don't have sufficient allowance on treasure

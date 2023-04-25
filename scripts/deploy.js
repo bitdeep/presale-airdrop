@@ -1,27 +1,38 @@
-// We require the Hardhat Runtime Environment explicitly here. This is optional
-// but useful for running the script in a standalone fashion through `node <script>`.
-//
-// You can also run a script with `npx hardhat run <script>`. If you do that, Hardhat
-// will compile your contracts, add the Hardhat Runtime Environment's members to the
-// global scope, and execute the script.
 const hre = require("hardhat");
-
+const fs = require('fs');
 async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const unlockTime = currentTimestampInSeconds + 60;
 
-  const lockedAmount = hre.ethers.utils.parseEther("0.001");
+  const network = await hre.ethers.provider.getNetwork();
+  const chainId = network.chainId;
+  const mainnet = network.chainId === 42161;
 
-  const Lock = await hre.ethers.getContractFactory("Lock");
-  const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
+  const PresaleAirdrop = await hre.ethers.getContractFactory("PresaleAirdrop");
+  const USDC = process.env.USDC;
+  const CLAIM_PERCENT = process.env.CLAIM_PERCENT;
+  const TREASURE = process.env.TREASURE;
+  const main = await PresaleAirdrop.deploy(USDC, CLAIM_PERCENT, TREASURE);
+  await main.deployed();
+  console.log(`- airdrop contract: ${main.address}`);
+  console.log(`- % to be paid: ${CLAIM_PERCENT}`);
+  console.log(`- USDC funds at: ${TREASURE}`);
+  fs.writeFileSync('./contract.txt', main.address);
 
-  await lock.deployed();
+  if( process.env.ARBSCAN ) {
+    try {
+      if (mainnet) {
+        await main.deployTransaction.wait(5);
+        await hre.run("verify:verify", {
+          address: main.address,
+          constructorArguments: [USDC, CLAIM_PERCENT, TREASURE]
+        });
+      }
+    } catch (e) {
+      console.log(e.toString());
+    }
+  }else{
+    console.log(`contract verification canceled as ARBSCAN API key not informed in .env file.`)
+  }
 
-  console.log(
-    `Lock with ${ethers.utils.formatEther(
-      lockedAmount
-    )}ETH and unlock timestamp ${unlockTime} deployed to ${lock.address}`
-  );
 }
 
 // We recommend this pattern to be able to use async/await everywhere

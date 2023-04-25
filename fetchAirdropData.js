@@ -28,10 +28,9 @@ async function onEventData( events, json, md, stats ){
         console.log(mdLine);
         md.push(mdLine);
 
-        // claimedAmount and claimedIn have 0 or loading into contract will fail.
         json.push({
-            u: user,
-            v: contributedAmount
+            user: user,
+            amount: contributedAmount
         });
         stats.contributors++;
         stats.total += contributedAmountDecimal;
