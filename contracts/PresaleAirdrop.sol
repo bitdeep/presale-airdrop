@@ -22,19 +22,6 @@ contract PresaleAirdrop is Ownable {
     using SafeERC20 for IERC20;
 
     /**
-     * @dev claimPercentValue is immutable and set at constructor to a % to be paid
-     * to the user, not allowing it's changes as it's value is used to compute
-     * initial allowance in payment token.
-     */
-
-    uint public immutable claimPercentValue;
-
-    /**
-     * @dev the denominator used to compute the %.
-     */
-    uint private constant CLAIM_DENOMINATOR = 100;
-
-    /**
      * @dev the address that contains payment funds to be transferred from this
      * wallet to the user.
      */
@@ -45,7 +32,7 @@ contract PresaleAirdrop is Ownable {
      */
     struct ClaimInfo {
         address user;
-        uint contributedAmount;
+        uint xGrailAmount;
         uint claimedAmount;
         uint claimedIn;
     }
@@ -56,7 +43,7 @@ contract PresaleAirdrop is Ownable {
     mapping(address => ClaimInfo) private claimData;
 
     /**
-     * @dev the token used to pay the claim to the user, ex: USDC.
+     * @dev the token used to pay the claim to the user, ex: xGRAIL.
      */
     IERC20 private immutable paymentToken;
 
@@ -76,7 +63,7 @@ contract PresaleAirdrop is Ownable {
     uint public totalClaims = 0;
 
     /**
-     * @dev the total of USDC already claimed.
+     * @dev the total of xGRAIL already claimed.
      */
     uint public totalClaimsAmount = 0;
 
@@ -103,32 +90,24 @@ contract PresaleAirdrop is Ownable {
      *
      * - user: contains msg.sender that called claim().
      * - claimedIn: contains the timestamp of the claim.
-     * - contributedAmount: set during initial load, contains amount of pre-sale contributed.
+     * - xGrailAmount: set during initial load, contains amount of pre-sale contributed.
      * - claimedAmount: contains the amount sent to the user in paymentToken.
      */
-    event Claim(address user, uint claimedIn, uint contributedAmount, uint claimedAmount);
+    event Claim(address user, uint claimedIn, uint claimedAmount);
 
     /**
      * @dev Emitted on any claim status change.
      */
     event ClaimOpenStatus(bool status);
 
-    constructor(address _paymentToken, uint _claimPercentValue, address _TREASURE){
+    constructor(address _paymentToken, address _TREASURE){
 
         /**
-         * @dev the payment token, must be USDC or 6 decimal, to match airdrop data.
+         * @dev the payment token, must be xGRAIL or 6 decimal, to match airdrop data.
          */
         paymentToken = IERC20(_paymentToken);
         paymentToken.totalSupply();
-
-        /**
-         * @dev set and test if % is valid.
-         */
-        if( _claimPercentValue == 0 || _claimPercentValue > 100 ){
-            revert InitInvalidClaimValue();
-        }
-        claimPercentValue = _claimPercentValue;
-
+        
         /**
          * @dev set and test if TREASURE is valid, this is where
          * source funds are stored and this contract must have
@@ -166,12 +145,12 @@ contract PresaleAirdrop is Ownable {
          */
         for( uint i = 0 ; i < users.length; ++i){
             address user = users[i];
-            uint contributedAmount = amounts[i];
+            uint xGrailAmount = amounts[i];
             // allow admin to retry the upload if tx fail
-            if( claimData[ user ].contributedAmount > 0 )
+            if( claimData[ user ].xGrailAmount > 0 )
                 continue;
             claimData[ user ].user = user;
-            claimData[ user ].contributedAmount = contributedAmount;
+            claimData[ user ].xGrailAmount = xGrailAmount;
         }
 
         /**
@@ -195,21 +174,20 @@ contract PresaleAirdrop is Ownable {
 
     /**
      * @dev compute a token amount by user address.
-     * if user already claimed return 0 otherwise return the % to ben sent.
+     * if user already claimed return 0 otherwise return the xGRAIL amount.
      */
-    function getClaimAmount(address user) public view returns(uint){
+    function getClaimAmount(address _user) public view returns(uint){
 
-        ClaimInfo memory user = claimData[user];
+        ClaimInfo memory user = claimData[_user];
 
         /**
          * @dev return 0 if user does not exist or already claimed.
          */
-        if( user.claimedIn > 0 || user.contributedAmount == 0 ){
+        if( user.claimedIn > 0 || user.xGrailAmount == 0 ){
             return 0;
         }
 
-        //the contributed and airdrop token are the same: USDC 6 decimals.
-        return (user.contributedAmount * claimPercentValue ) / CLAIM_DENOMINATOR;
+        return user.xGrailAmount;
 
     }
 
@@ -233,7 +211,7 @@ contract PresaleAirdrop is Ownable {
         /**
          * @dev prevent user calling this function without a valid claim info.
          */
-        if( user.contributedAmount == 0 ){
+        if( user.xGrailAmount == 0 ){
             revert UserNotFound();
         }
 
@@ -254,7 +232,7 @@ contract PresaleAirdrop is Ownable {
         // set the number of address that already claimed.
         ++totalClaims;
 
-        // set the amount of USDC already claimed.
+        // set the amount of xGRAIL already claimed.
         totalClaimsAmount += user.claimedAmount;
 
         /**
@@ -266,7 +244,7 @@ contract PresaleAirdrop is Ownable {
         }
 
         /**
-         * @dev revert if we don't have sufficient fundos on treasure
+         * @dev revert if we don't have sufficient funds on treasure
          * address to transfer funds from.
          */
         if( paymentToken.balanceOf(TREASURE) < user.claimedAmount ){
@@ -281,7 +259,7 @@ contract PresaleAirdrop is Ownable {
         /**
          * @dev event with all claim info to allow future data processing.
          */
-        emit Claim(msg.sender, user.claimedIn, user.contributedAmount, user.claimedAmount);
+        emit Claim(msg.sender, user.claimedIn, user.claimedAmount);
 
     }
 }

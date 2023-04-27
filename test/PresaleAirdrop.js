@@ -11,44 +11,32 @@ describe("PresaleAirdrop", function () {
     let user1;
     let user2;
     let user3;
-    let AirdropAmount = 0;
-    const FeeShare = 10; // 10%
-    const user1Contribution = 1e6.toString();
+    let AirdropAmount = 0n;
+    const user1Airdrop = "3359678215500000000";
 
     // store the total by address ready to load into the contract
     let consolidatedData = [];
 
     beforeEach(async function () {
         [owner, user1, user2, user3] = await ethers.getSigners();
-        PaymentToken = await ethers.getContractFactory("FaucetERC20d6");
-        paymentToken = await PaymentToken.deploy("USDC", "USDC", 0);
+        PaymentToken = await ethers.getContractFactory("FaucetERC20d18");
+        paymentToken = await PaymentToken.deploy("xGRAIL", "xGRAIL", 0);
         PresaleAirdrop = await ethers.getContractFactory("PresaleAirdrop");
-        presaleAirdrop = await PresaleAirdrop.deploy(paymentToken.address, FeeShare, owner.address);
+        presaleAirdrop = await PresaleAirdrop.deploy(paymentToken.address, owner.address);
 
         // get all contributions, can be various by address.
-        allContributions = JSON.parse(fs.readFileSync('./airdrop.json').toString());
-
-        // consolidate contributions
-        let balanceByUsers = {};
-        for( let i in allContributions ){
-            let contribution = allContributions[i];
-            const user = contribution.user;
-            balanceByUsers[ user ] = balanceByUsers[ user ] || 0;
-            balanceByUsers[ user ] += parseFloat(contribution.amount);
-        }
-
-        // no load balanceByUsers into an array to pass to the contract
-        for( let user in balanceByUsers){
-            consolidatedData.push({user: user, amount: balanceByUsers[user]});
-        }
+        consolidatedData = JSON.parse(fs.readFileSync('./airdrop.json').toString());
 
         // now that all the contribution are consolidated by address we can inject in
         // chucks into the contract
         const limitByTx = 250;
         let users = [], amounts = [];
-        for( let i = 0; i < consolidatedData.length; ++i ){
-            const user = consolidatedData[i].user;
-            const amount = consolidatedData[i].amount;
+        for( let i = 0; i < consolidatedData.length; i++ ){
+            const user = consolidatedData[i].address;
+            const amount = consolidatedData[i].xgrail_airdrop_allocation;
+            users.push( user );
+            amounts.push( amount );
+            AirdropAmount += BigInt(amount);
 
             // we run and reset the chunk
             if( users.length === limitByTx || i+1 === consolidatedData.length ) {
@@ -57,15 +45,12 @@ describe("PresaleAirdrop", function () {
                 amounts = [];
             }
 
-            users.push( user );
-            amounts.push( amount );
-            AirdropAmount += parseFloat(amount);
         }
 
-        expect(await presaleAirdrop.totalUsers()).to.be.eq(consolidatedData.length-1);
+        expect(await presaleAirdrop.totalUsers()).to.be.eq(consolidatedData.length);
         
         // add user1 to allow it to pass some tests.
-        await presaleAirdrop.loadClaims([user1.address], [user1Contribution] );
+        await presaleAirdrop.loadClaims([user1.address], [user1Airdrop] );
 
         await paymentToken.mint(AirdropAmount.toString());
         await paymentToken.approve(presaleAirdrop.address, AirdropAmount.toString());
@@ -100,11 +85,12 @@ describe("PresaleAirdrop", function () {
 
     it("should check if all users are loaded correctly", async function () {
         for( let i = 0; i < consolidatedData.length; ++i ){
-            const user = consolidatedData[i].user;
-            const amount = consolidatedData[i].amount;
+            const user = consolidatedData[i].address;
+            const amount = consolidatedData[i].xgrail_airdrop_allocation;
             const ClaimInfo = await presaleAirdrop.getClaimInfo(user);
-            expect(ClaimInfo.contributedAmount).to.equal(amount);
+            expect(ClaimInfo.xGrailAmount).to.equal(amount);
         }
+
     });
 
     it("should revert if caller is not owner", async function () {
@@ -142,19 +128,18 @@ describe("PresaleAirdrop", function () {
         await presaleAirdrop.setClaimOpenStatus(true);
 
         const getClaimAmount = (await presaleAirdrop.getClaimAmount(user1.address)).toString();
-        const claimValid = (parseFloat(user1Contribution) * FeeShare / 100).toString();
-        expect(getClaimAmount).to.be.eq(claimValid);
+        expect(getClaimAmount).to.be.eq(user1Airdrop);
 
         const block = await ethers.provider.getBlock();
         let ts = parseInt(block.timestamp);
         await expect(presaleAirdrop.connect(user1).claim()).to
             .emit(presaleAirdrop, 'Claim')
-            .withArgs(user1.address, ++ts, user1Contribution, claimValid);
+            .withArgs(user1.address, ++ts, user1Airdrop);
 
         // Check that the user's claim info has been updated
         const user1ClaimInfo = await presaleAirdrop.getClaimInfo(user1.address);
         expect(parseInt(user1ClaimInfo.claimedIn.toString())).to.be.gt(0);
-        expect(user1ClaimInfo.claimedAmount.toString()).to.equal(claimValid);
+        expect(user1ClaimInfo.claimedAmount.toString()).to.equal(user1Airdrop);
     });
 
 });

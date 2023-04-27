@@ -9,53 +9,34 @@ task("load", "load data into deployed contract").setAction(async () => {
     const PresaleAirdrop = await ethers.getContractFactory("PresaleAirdrop")
     const presaleAirdrop = PresaleAirdrop.attach(contractAddress);
 
-    // store the total by address ready to load into the contract
-    let consolidatedData = [];
-
     // get all contributions, can be various by address.
-    const allContributions = JSON.parse(fs.readFileSync('./airdrop.json').toString());
+    const xgrailData = JSON.parse(fs.readFileSync('./airdrop.json').toString());
 
-    // consolidate contributions
-    let balanceByUsers = {};
-    for( let i in allContributions ){
-        let contribution = allContributions[i];
-        const user = contribution.user;
-        balanceByUsers[ user ] = balanceByUsers[ user ] || 0;
-        balanceByUsers[ user ] += parseFloat(contribution.amount);
-    }
-
-    // no load balanceByUsers into an array to pass to the contract
-    for( let user in balanceByUsers){
-        consolidatedData.push({user: user, amount: balanceByUsers[user]});
-    }
-    let AirdropAmount = 0;
+    let AirdropAmount = 0n;
     // now that all the contribution are consolidated by address we can inject in
     // chucks into the contract
     const limitByTx = 250;
     let users = [], amounts = [];
 
-    console.log(`Loading: ${consolidatedData.length} into ${contractAddress}`);
+    console.log(`Loading: ${xgrailData.length} users into ${contractAddress}`);
 
-    for( let i = 0; i < consolidatedData.length; ++i ){
-        const user = consolidatedData[i].user;
-        const amount = consolidatedData[i].amount;
-
+    for( let i = 0; i < xgrailData.length; i++ ){
+        const user = xgrailData[i].address;
+        const amount = xgrailData[i].xgrail_airdrop_allocation;
+        users.push( user );
+        amounts.push( amount );
+        AirdropAmount += BigInt(amount);
         // we run and reset the chunk
-        if( users.length === limitByTx || i+1 === consolidatedData.length ) {
-            console.log(` - adding: ${users.length} users...`);
+        if( users.length === limitByTx || i+1 === xgrailData.length ) {
             const tx = await presaleAirdrop.loadClaims(users, amounts);
             await tx.wait();
             console.log(` - tx: ${tx.hash}`);
             users = [];
             amounts = [];
         }
-
-        users.push( user );
-        amounts.push( amount );
-        AirdropAmount += parseFloat(amount);
     }
 
-    console.log(`Allowance needed: ${AirdropAmount} (${parseFloat(AirdropAmount/1e6).toFixed(2)}) USDC.`);
+    console.log(`Allowance needed: ${AirdropAmount.toString()} (${parseFloat(AirdropAmount.toString()/1e18).toFixed(2)}) xGRAIL.`);
 
 });
 
@@ -71,7 +52,7 @@ module.exports = {
         hardhat: {
             forking: {
                 url: `${process.env.RPC}`,
-                blockNumber: 84293972
+                blockNumber: 84934089
             }
         },
         localhost: {

@@ -29,7 +29,7 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
  * functions have been added to mitigate the well-known issues around setting
  * allowances. See {IERC20-approve}.
  */
-contract ERC20d6 is Context, IERC20 {
+contract ERC20d18 is Context, IERC20 {
     using SafeMath for uint256;
     using Address for address;
 
@@ -55,7 +55,7 @@ contract ERC20d6 is Context, IERC20 {
     constructor (string memory __name, string memory __symbol) {
         _name = __name;
         _symbol = __symbol;
-        _decimals = 6;
+        _decimals = 18;
     }
 
     /**

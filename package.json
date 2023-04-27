@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.8.3",
+    "bignumber.js": "^9.1.1",
     "dotenv": "^16.0.3",
     "hardhat": "^2.14.0",
     "web3": "^1.9.0"
